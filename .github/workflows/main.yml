@@ -13,6 +13,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Lets the app/ and gradle/ folders be uploaded as ONE file (app-source.zip), which is easier
+      # than uploading folders through the GitHub website. Unpacked next to settings.gradle.kts.
+      - name: Unpack app-source.zip (if present)
+        shell: bash {0}
+        run: |
+          ZIP=$(find . -maxdepth 2 -name 'app-source.zip' -not -path './.git/*' | head -n 1)
+          if [ -n "$ZIP" ]; then
+            unzip -oq "$ZIP" -d "$(dirname "$ZIP")" && echo "Unpacked $ZIP"
+          else
+            echo "No app-source.zip found; using the folders as uploaded."
+          fi
+
       # Finds the Gradle project even if the files were uploaded inside a sub-folder.
       - name: Locate project
         id: project
