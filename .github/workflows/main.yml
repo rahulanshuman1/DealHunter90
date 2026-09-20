@@ -7,17 +7,16 @@ on:
 
 jobs:
   build:
-    # Pinned so the build doesn't change when GitHub moves "ubuntu-latest" to a new release.
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Finds the Gradle project even if the files were uploaded inside a sub-folder,
-      # and prints what is in the repo so a wrong layout is obvious in the log.
+      # Finds the Gradle project even if the files were uploaded inside a sub-folder.
       - name: Locate project
         id: project
+        shell: bash {0}
         run: |
           echo "Files in repository (top 3 levels):"
           find . -maxdepth 3 -not -path './.git/*' | sort | head -80
@@ -36,26 +35,49 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Installs Gradle itself, so the build does not depend on gradlew or gradle-wrapper.jar
-      # (browser uploads can drop the executable flag on gradlew).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
       - name: Accept Android SDK licenses
+        shell: bash {0}
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
-        run: gradle assembleDebug --stacktrace --no-daemon
+        shell: bash {0}
+        run: |
+          gradle assembleDebug --stacktrace --no-daemon 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+          exit "${PIPESTATUS[0]}"
 
+      # Uploaded even if a later step fails, so a built APK is never lost.
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DealHunter90-apk
           path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      # Puts the reason for any failure at the top of the run's Summary page.
+      - name: Show result in summary
+        if: always()
+        shell: bash {0}
+        run: |
+          LOG="$GITHUB_WORKSPACE/build.log"
+          APKDIR="${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug"
+          {
+            echo "## Build result"
+            if ls "$APKDIR"/*.apk >/dev/null 2>&1; then echo "**APK built: yes**"; else echo "**APK built: NO**"; fi
+            if [ -f "$LOG" ]; then
+              echo "### Kotlin compile errors"; echo '```'; grep -E '^e: ' "$LOG" | head -60; echo '```'
+              echo "### What went wrong"; echo '```'; grep -A12 'What went wrong' "$LOG" | head -40; echo '```'
+              echo "### Last 40 lines of the Gradle log"; echo '```'; tail -n 40 "$LOG"; echo '```'
+            else
+              echo "The Gradle build step did not run. Open the red step in the job log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build reports (on failure)
         if: failure()
