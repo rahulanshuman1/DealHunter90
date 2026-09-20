@@ -29,6 +29,29 @@ jobs:
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
           echo "Project folder: $DIR"
 
+      # Fails early with a clear message if folders were left out of the upload.
+      - name: Verify project files
+        shell: bash {0}
+        run: |
+          DIR="${{ steps.project.outputs.dir }}"
+          MISSING=0
+          for f in settings.gradle.kts build.gradle.kts app/build.gradle.kts \
+                   app/src/main/AndroidManifest.xml app/src/main/kotlin/app/linkharvest/MainActivity.kt; do
+            if [ ! -f "$DIR/$f" ]; then echo "::error::Missing file: $f"; MISSING=1; fi
+          done
+          if [ "$MISSING" = 1 ]; then
+            {
+              echo "## Upload problem"
+              echo "Some project files are missing from the repository. Upload the whole **app** and **gradle** folders (drag the folders, not just the files inside them)."
+              echo "### Files currently in the repository"
+              echo '```'
+              (cd "$DIR" && find . -type f -not -path './.git/*' | sort | head -100)
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All key project files are present."
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
