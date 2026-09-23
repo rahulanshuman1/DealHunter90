@@ -14,4 +14,11 @@
         android:strokeWidth="3.5"
         android:strokeLineCap="round"
         android:pathData="M45,46 L45,41 A9,9 0 0 1 63,41 L63,46" />
+    <!-- Discount tag: a small coral badge over the bag, marking the app's purpose at a glance -->
+    <path
+        android:fillColor="#FF6D3F"
+        android:pathData="M66,32 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M72.5,32 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0z" />
 </vector>
