@@ -1,6 +1,7 @@
 package app.linkharvest.engine
 
 import android.annotation.SuppressLint
+import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -22,14 +23,17 @@ import java.io.IOException
 import kotlin.coroutines.resume
 
 /** Why the collector needs the person to act before it can continue. */
-enum class Interruption { Verification, Location }
+enum class Interruption { Verification, Location, Empty }
 
 /**
  * Drives a real, visible [WebView] the way a person would: open the site's search page, scroll to
  * load more results, and read the product links out of the page.
  *
- * It does not spoof a browser identity or try to defeat bot checks. If a site shows a CAPTCHA or asks
- * for a delivery location, the collector pauses and hands control to the person.
+ * It identifies as a normal mobile Chrome browser rather than Android's default WebView identity
+ * (which several sites use to serve an app-download nag or a stripped-down page instead of real
+ * content) but does not try to defeat CAPTCHAs or other active bot checks — if a site shows one of
+ * those, or asks for a delivery location, or simply isn't showing any products, the collector
+ * pauses and hands control to the person.
  *
  * All methods must be called on the main thread (WebView requirement).
  */
@@ -52,6 +56,16 @@ class WebCollector(private val web: WebView) {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
+            // Android's default WebView user agent appends "; wv", which some sites use to detect
+            // an embedded browser and respond with an app-download banner or a login wall instead
+            // of the page a person would otherwise see in Chrome.
+            userAgentString = MOBILE_CHROME_USER_AGENT
+        }
+        // Explicit, so the delivery location or login a person sets in the page survives the
+        // reload this collector does afterwards, and later app launches.
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(web, true)
         }
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -65,6 +79,7 @@ class WebCollector(private val web: WebView) {
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
+                CookieManager.getInstance().flush()
                 pageLoaded?.complete(Unit)
             }
         }
@@ -117,11 +132,28 @@ class WebCollector(private val web: WebView) {
 
         merge(readProducts(platform))
 
-        if (seen.isEmpty() && platform.needsLocation) {
-            if (!onNeedsUser(Interruption.Location)) return emptyList()
-            load(searchUrl) // reload so results reflect the chosen location
-            delay(INITIAL_RENDER_MS)
+        // Not just needsLocation platforms: any site can show a blank page, an app-download
+        // banner or a login wall instead of results. Pausing here — rather than only for the
+        // platforms known to need a location — gives the person a chance to deal with whatever
+        // the site actually shows, on any of the eight sites.
+        if (seen.isEmpty() && !platform.needsLocation) {
+            // A site that doesn't need a location can still just be slow. Give it one more chance
+            // before assuming something is actually wrong.
+            scrollDown()
+            delay(SLOW_SCROLL_MS)
             merge(readProducts(platform))
+        }
+        if (seen.isEmpty()) {
+            val reason = if (platform.needsLocation) Interruption.Location else Interruption.Empty
+            if (!onNeedsUser(reason)) return emptyList()
+            // Check the page as it is first: the site may already have updated it client-side, and
+            // a fresh navigation right afterwards can race the site's own update and lose it.
+            merge(readProducts(platform))
+            if (seen.isEmpty()) {
+                load(searchUrl)
+                delay(INITIAL_RENDER_MS)
+                merge(readProducts(platform))
+            }
         }
         report()
 
@@ -215,10 +247,16 @@ class WebCollector(private val web: WebView) {
         const val STAGNANT_LIMIT = 2
         const val SNIPPET_LENGTH = 90
         val WHITESPACE = Regex("\\s+")
+        const val MOBILE_CHROME_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/128.0.0.0 Mobile Safari/537.36"
 
         val BLOCK_PATTERN = Regex(
             "captcha|robot check|are you a robot|access denied|unusual traffic|" +
-                "verify you are (a )?human|enter the characters you see",
+                "verify you are (a )?human|enter the characters you see|" +
+                "log ?in to (continue|view|see)|sign ?in to (continue|view|see)|" +
+                "please (log|sign) ?in to (continue|view)|verify your mobile number|" +
+                "enter your mobile number to continue",
             RegexOption.IGNORE_CASE,
         )
 
