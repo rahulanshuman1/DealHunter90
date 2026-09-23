@@ -7,19 +7,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.linkharvest.data.Platforms
@@ -51,16 +56,19 @@ fun ResultsScreen(
         item {
             Padded {
                 Text(
-                    "${state.totalLinks} deals at ${state.resultsMinDiscount}%+ off for “${state.resultsQuery}”",
-                    style = MaterialTheme.typography.titleLarge,
+                    "${state.totalLinks} deals at ${state.resultsMinDiscount}%+ off",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                Text("for \u201c${state.resultsQuery}\u201d", style = MaterialTheme.typography.bodyMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
                     OutlinedButton(onClick = onCopyAll, enabled = state.totalLinks > 0) { Text("Copy") }
                     OutlinedButton(onClick = onShare, enabled = state.totalLinks > 0) { Text("Share") }
                     OutlinedButton(onClick = onExport, enabled = state.totalLinks > 0) { Text("Export CSV") }
                 }
                 Text(
-                    "Tap a link to open it · long-press to copy. Confirm the price on the product page before buying.",
+                    "Tap a deal to open it · long-press to copy. Confirm the price on the product page before buying.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
@@ -97,33 +105,53 @@ fun ResultsScreen(
                 }
             }
             items(deals, key = { "${platform.id}|${it.url}" }) { deal ->
-                Column(
+                ElevatedCard(
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .combinedClickable(onClick = { onOpenLink(deal.url) }, onLongClick = { onCopyLink(deal.url) })
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .combinedClickable(onClick = { onOpenLink(deal.url) }, onLongClick = { onCopyLink(deal.url) }),
                 ) {
-                    Text(
-                        text = if (deal.computed) "${deal.percent}% off (calculated)" else "${deal.percent}% off",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                    Text(
-                        text = deal.url.removePrefix("https://"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (deal.snippet.isNotBlank()) {
-                        Text(
-                            text = deal.snippet,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            Text(
+                                text = "${deal.percent}%\nOFF",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = deal.url.removePrefix("https://"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (deal.computed) {
+                                Text(
+                                    "Calculated from price & MRP",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (deal.snippet.isNotBlank()) {
+                                Text(
+                                    text = deal.snippet,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                 }
             }
