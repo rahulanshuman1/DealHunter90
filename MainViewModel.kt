@@ -193,6 +193,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val instruction = when (reason) {
             Interruption.Verification -> "${platform.displayName} is asking for verification. Complete it in the page, then tap Continue."
             Interruption.Location -> "${platform.displayName} needs a delivery location. Set it in the page, then tap Continue."
+            Interruption.Empty -> "${platform.displayName} isn't showing any products yet. Check the page — dismiss any pop-up or log in if it asks — then tap Continue, or Skip this site."
         }
         _ui.update { it.copy(waitingForUser = true, status = instruction) }
         val proceed = withTimeoutOrNull(USER_WAIT_MS) { gate.await() } ?: false
